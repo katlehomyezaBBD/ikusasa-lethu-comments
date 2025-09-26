@@ -98,6 +98,7 @@ const writeCommentsToBlob = async (studentNumber, site, comments) => {
     contentType: 'application/json',
     token,
     addRandomSuffix: false, // Keep the same filename
+    allowOverwrite: true, // Allow overwriting existing blob
   });
   
   // Cache the URL for future reads
