@@ -1,19 +1,11 @@
 const API_BASE_URL = 'http://localhost:3000/api';
 
-class CommentsClient {
-  constructor(studentNumber) {
-    if (!studentNumber) {
-      throw new Error('Student number is required');
-    }
-    this.studentNumber = studentNumber;
-  }
-
   /**
    * Get all comments for a specific site
    * @param {string} site - The site identifier (e.g., 'homepage', 'about-page')
    * @returns {Promise<Array>} Array of comment objects
    */
-  async getComments(site) {
+  export async function getComments(site) {
     if (!site) {
       throw new Error('Site parameter is required');
     }
@@ -43,7 +35,7 @@ class CommentsClient {
    * @param {string} sender - Optional sender name
    * @returns {Promise<Object>} The created comment object
    */
-  async postComment(site, text, sender = 'Anonymous') {
+  export async function postComment(site, text, sender = 'Anonymous') {
     if (!site || !text) {
       throw new Error('Site and text are required');
     }
@@ -77,7 +69,7 @@ class CommentsClient {
    * @param {string} commentId - The ID of the comment to delete
    * @returns {Promise<Object>} Success message
    */
-  async deleteComment(site, commentId) {
+  export async function deleteComment(site, commentId) {
     if (!site || !commentId) {
       throw new Error('Site and commentId are required');
     }
@@ -99,7 +91,5 @@ class CommentsClient {
 
     return await response.json();
   }
-}
-
-module.exports = CommentsClient;
+module.exports = { getComments, postComment, deleteComment };
 
