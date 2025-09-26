@@ -5,7 +5,6 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 const DATA_DIR = './data/comments';
 
 // Middleware
@@ -21,32 +20,19 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
 app.use('/api', limiter);
 
 // Utility functions
-const sanitizeText = (text) => {
-  if (typeof text !== 'string') return '';
-  // Strip HTML tags and trim whitespace
-  return text.replace(/<[^>]*>/g, '').trim();
-};
+const sanitizeText = (text) =>
+  typeof text === 'string' ? text.replace(/<[^>]*>/g, '').trim() : '';
 
-const generateId = () => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substr(2, 5);
-  return `${timestamp}_${random}`;
-};
+const generateId = () =>
+  `${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`;
 
-const validateStudentNumber = (studentNumber) => {
-  // Simple validation: alphanumeric, 3-20 characters
-  return /^[a-zA-Z0-9]{3,20}$/.test(studentNumber);
-};
+const validateStudentNumber = (sn) => /^[a-zA-Z0-9]{3,20}$/.test(sn);
 
-const sanitizeSiteName = (site) => {
-  if (typeof site !== 'string') return '';
-  // Allow alphanumeric, dots, hyphens, underscores
-  return site.replace(/[^a-zA-Z0-9.\-_]/g, '').trim();
-};
+const sanitizeSiteName = (site) =>
+  typeof site === 'string' ? site.replace(/[^a-zA-Z0-9.\-_]/g, '').trim() : '';
 
 const ensureDataDirectory = async () => {
   try {
@@ -57,60 +43,51 @@ const ensureDataDirectory = async () => {
   }
 };
 
-const getCommentsFilePath = (studentNumber, site) => {
-  const sanitizedSite = sanitizeSiteName(site);
-  return path.join(DATA_DIR, `${studentNumber}_${sanitizedSite}.json`);
-};
+const getCommentsFilePath = (studentNumber, site) =>
+  path.join(DATA_DIR, `${studentNumber}_${sanitizeSiteName(site)}.json`);
 
 const readCommentsFile = async (filePath) => {
   try {
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      return []; // File doesn't exist, return empty array
-    }
+    if (error.code === 'ENOENT') return [];
     throw error;
   }
 };
 
-const writeCommentsFile = async (filePath, comments) => {
-  await fs.writeFile(filePath, JSON.stringify(comments, null, 2), 'utf8');
-};
+const writeCommentsFile = (filePath, comments) =>
+  fs.writeFile(filePath, JSON.stringify(comments, null, 2), 'utf8');
 
 // Logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path} - Student: ${req.headers['x-student-number'] || 'none'}`);
+  console.log(
+    `${new Date().toISOString()} ${req.method} ${req.path} - Student: ${
+      req.headers['x-student-number'] || 'none'
+    }`
+  );
   next();
 });
 
 // Routes
 app.get('/api/comments', async (req, res) => {
   try {
+    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site } = req.query;
 
-    // Validation
-    if (!studentNumber) {
+    if (!studentNumber)
       return res.status(400).json({ error: 'Missing X-Student-Number header' });
-    }
-
-    if (!validateStudentNumber(studentNumber)) {
+    if (!validateStudentNumber(studentNumber))
       return res.status(401).json({ error: 'Invalid student number format' });
-    }
-
-    if (!site) {
-      return res.status(400).json({ error: 'Missing site parameter' });
-    }
+    if (!site) return res.status(400).json({ error: 'Missing site parameter' });
 
     const sanitizedSite = sanitizeSiteName(site);
-    if (!sanitizedSite) {
+    if (!sanitizedSite)
       return res.status(400).json({ error: 'Invalid site parameter' });
-    }
 
     const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
     const comments = await readCommentsFile(filePath);
-
     res.json(comments);
   } catch (error) {
     console.error('Error getting comments:', error);
@@ -118,51 +95,38 @@ app.get('/api/comments', async (req, res) => {
   }
 });
 
-// Post comment
 app.post('/api/comments', async (req, res) => {
   try {
+    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site, text, sender } = req.body;
 
-    // Validation
-    if (!studentNumber) {
+    if (!studentNumber)
       return res.status(400).json({ error: 'Missing X-Student-Number header' });
-    }
-
-    if (!validateStudentNumber(studentNumber)) {
+    if (!validateStudentNumber(studentNumber))
       return res.status(401).json({ error: 'Invalid student number format' });
-    }
-
-    if (!site || !text) {
+    if (!site || !text)
       return res.status(400).json({ error: 'Missing required fields: site and text' });
-    }
 
     const sanitizedSite = sanitizeSiteName(site);
     const sanitizedText = sanitizeText(text);
-    const sanitizeSender = sanitizeText(sender);;
+    const sanitizeSender = sanitizeText(sender);
 
-    if (!sanitizedSite) {
+    if (!sanitizedSite)
       return res.status(400).json({ error: 'Invalid site parameter' });
-    }
-
-    if (sanitizedText.length === 0) {
+    if (sanitizedText.length === 0)
       return res.status(400).json({ error: 'Text cannot be empty after sanitization' });
-    }
-
-    if (sanitizedText.length > 280) {
+    if (sanitizedText.length > 280)
       return res.status(400).json({ error: 'Text exceeds maximum length of 280 characters' });
-    }
 
-    // Create comment object
     const comment = {
       id: generateId(),
       site: sanitizedSite,
       sender: sanitizeSender,
       text: sanitizedText,
-      ts: new Date().toISOString()
+      ts: new Date().toISOString(),
     };
 
-    // Read existing comments, append new one, and write back
     const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
     const comments = await readCommentsFile(filePath);
     comments.push(comment);
@@ -176,36 +140,28 @@ app.post('/api/comments', async (req, res) => {
   }
 });
 
-// Optional: DELETE endpoint for teacher-admin (nice-to-have)
 app.delete('/api/comments/:commentId', async (req, res) => {
   try {
+    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site } = req.query;
     const { commentId } = req.params;
 
-    // Validation
-    if (!studentNumber || !validateStudentNumber(studentNumber)) {
+    if (!studentNumber || !validateStudentNumber(studentNumber))
       return res.status(401).json({ error: 'Invalid or missing student number' });
-    }
-
-    if (!site) {
-      return res.status(400).json({ error: 'Missing site parameter' });
-    }
+    if (!site) return res.status(400).json({ error: 'Missing site parameter' });
 
     const sanitizedSite = sanitizeSiteName(site);
-    if (!sanitizedSite) {
+    if (!sanitizedSite)
       return res.status(400).json({ error: 'Invalid site parameter' });
-    }
 
     const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
     let comments = await readCommentsFile(filePath);
-    
     const initialLength = comments.length;
-    comments = comments.filter(comment => comment.id !== commentId);
+    comments = comments.filter((comment) => comment.id !== commentId);
 
-    if (comments.length === initialLength) {
+    if (comments.length === initialLength)
       return res.status(404).json({ error: 'Comment not found' });
-    }
 
     await writeCommentsFile(filePath, comments);
     console.log(`Comment ${commentId} deleted for student ${studentNumber} on site ${sanitizedSite}`);
@@ -227,30 +183,5 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Initialize and start server
-const startServer = async () => {
-  try {
-    await ensureDataDirectory();
-    app.listen(PORT, () => {
-      console.log(`Comments API server running on port ${PORT}`);
-      console.log(`Data directory: ${path.resolve(DATA_DIR)}`);
-      console.log(`Health check: http://localhost:${PORT}/api/health`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\nReceived SIGINT. Shutting down gracefully...');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM. Shutting down gracefully...');
-  process.exit(0);
-});
-
-startServer();
+// Export app for Vercel
+module.exports = app;
