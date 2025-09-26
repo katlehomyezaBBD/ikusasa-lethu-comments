@@ -1,11 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
 const rateLimit = require('express-rate-limit');
+const { put, head } = require('@vercel/blob');
 
 const app = express();
-const DATA_DIR = './data/comments';
 
 // Middleware
 app.use(cors());
@@ -34,30 +32,77 @@ const validateStudentNumber = (sn) => /^[a-zA-Z0-9]{3,20}$/.test(sn);
 const sanitizeSiteName = (site) =>
   typeof site === 'string' ? site.replace(/[^a-zA-Z0-9.\-_]/g, '').trim() : '';
 
-const ensureDataDirectory = async () => {
-  try {
-    await fs.access(DATA_DIR);
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    console.log(`Created data directory: ${DATA_DIR}`);
-  }
+// In-memory cache to track blob URLs
+const blobUrlCache = new Map();
+
+const getBlobPath = (studentNumber, site) =>
+  `comments/${studentNumber}_${sanitizeSiteName(site)}.json`;
+
+const getBlobUrl = (studentNumber, site) => {
+  const key = `${studentNumber}_${site}`;
+  return blobUrlCache.get(key);
 };
 
-const getCommentsFilePath = (studentNumber, site) =>
-  path.join(DATA_DIR, `${studentNumber}_${sanitizeSiteName(site)}.json`);
+const setBlobUrl = (studentNumber, site, url) => {
+  const key = `${studentNumber}_${site}`;
+  blobUrlCache.set(key, url);
+};
 
-const readCommentsFile = async (filePath) => {
+const readCommentsFromBlob = async (studentNumber, site) => {
   try {
-    const data = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(data);
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    
+    if (!token) {
+      throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
+    }
+
+    // Try to get cached URL first
+    let blobUrl = getBlobUrl(studentNumber, site);
+    
+    // If no cached URL, try to fetch using head
+    if (!blobUrl) {
+      const blobPath = getBlobPath(studentNumber, site);
+      try {
+        const blob = await head(blobPath, { token });
+        blobUrl = blob.url;
+        setBlobUrl(studentNumber, site, blobUrl);
+      } catch (error) {
+        // Blob doesn't exist yet
+        return [];
+      }
+    }
+
+    // Fetch the blob content
+    const response = await fetch(blobUrl);
+    if (!response.ok) {
+      return [];
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
   } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
+    console.error('Error reading from blob:', error);
+    return [];
   }
 };
 
-const writeCommentsFile = (filePath, comments) =>
-  fs.writeFile(filePath, JSON.stringify(comments, null, 2), 'utf8');
+const writeCommentsToBlob = async (studentNumber, site, comments) => {
+  const blobPath = getBlobPath(studentNumber, site);
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  
+  if (!token) {
+    throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
+  }
+  
+  const blob = await put(blobPath, JSON.stringify(comments, null, 2), {
+    access: 'public',
+    contentType: 'application/json',
+    token,
+    addRandomSuffix: false, // Keep the same filename
+  });
+  
+  // Cache the URL for future reads
+  setBlobUrl(studentNumber, site, blob.url);
+};
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -72,7 +117,6 @@ app.use((req, res, next) => {
 // Routes
 app.get('/api/comments', async (req, res) => {
   try {
-    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site } = req.query;
 
@@ -86,8 +130,7 @@ app.get('/api/comments', async (req, res) => {
     if (!sanitizedSite)
       return res.status(400).json({ error: 'Invalid site parameter' });
 
-    const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
-    const comments = await readCommentsFile(filePath);
+    const comments = await readCommentsFromBlob(studentNumber, sanitizedSite);
     res.json(comments);
   } catch (error) {
     console.error('Error getting comments:', error);
@@ -97,7 +140,6 @@ app.get('/api/comments', async (req, res) => {
 
 app.post('/api/comments', async (req, res) => {
   try {
-    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site, text, sender } = req.body;
 
@@ -127,10 +169,9 @@ app.post('/api/comments', async (req, res) => {
       ts: new Date().toISOString(),
     };
 
-    const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
-    const comments = await readCommentsFile(filePath);
+    const comments = await readCommentsFromBlob(studentNumber, sanitizedSite);
     comments.push(comment);
-    await writeCommentsFile(filePath, comments);
+    await writeCommentsToBlob(studentNumber, sanitizedSite, comments);
 
     console.log(`Comment added for student ${studentNumber} on site ${sanitizedSite}`);
     res.status(201).json(comment);
@@ -142,7 +183,6 @@ app.post('/api/comments', async (req, res) => {
 
 app.delete('/api/comments/:commentId', async (req, res) => {
   try {
-    await ensureDataDirectory();
     const studentNumber = req.headers['x-student-number'];
     const { site } = req.query;
     const { commentId } = req.params;
@@ -155,15 +195,14 @@ app.delete('/api/comments/:commentId', async (req, res) => {
     if (!sanitizedSite)
       return res.status(400).json({ error: 'Invalid site parameter' });
 
-    const filePath = getCommentsFilePath(studentNumber, sanitizedSite);
-    let comments = await readCommentsFile(filePath);
+    let comments = await readCommentsFromBlob(studentNumber, sanitizedSite);
     const initialLength = comments.length;
     comments = comments.filter((comment) => comment.id !== commentId);
 
     if (comments.length === initialLength)
       return res.status(404).json({ error: 'Comment not found' });
 
-    await writeCommentsFile(filePath, comments);
+    await writeCommentsToBlob(studentNumber, sanitizedSite, comments);
     console.log(`Comment ${commentId} deleted for student ${studentNumber} on site ${sanitizedSite}`);
     res.json({ message: 'Comment deleted successfully' });
   } catch (error) {
