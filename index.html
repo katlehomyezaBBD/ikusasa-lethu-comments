@@ -118,8 +118,8 @@
                         <div class="comment">
                             <div class="comment-header">
                                 <div class="comment-meta">
-                                    <strong>${comment.author || 'Anonymous'}</strong> - 
-                                    ${new Date(comment.timestamp).toLocaleString()}
+                                    <strong>${comment.sender || 'Anonymous'}</strong> - 
+                                    ${new Date(comment.ts).toLocaleString()}
                                 </div>
                                 <button class="delete-btn" onclick="deleteComment('${comment.id}')">Delete</button>
                             </div>
@@ -145,7 +145,7 @@
             
             try {
                 document.getElementById('error').innerHTML = '';
-                await addComment(STUDENT_NUMBER, SITE_ID, commentText);
+                await postComment(STUDENT_NUMBER, SITE_ID, commentText, "Me");
                 document.getElementById('commentText').value = '';
                 await loadComments();
             } catch (error) {
@@ -154,9 +154,6 @@
         }
 
         async function deleteComment(commentId) {
-            if (!confirm('Are you sure you want to delete this comment?')) {
-                return;
-            }
             
             try {
                 document.getElementById('error').innerHTML = '';
