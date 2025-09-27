@@ -56,29 +56,30 @@ const readCommentsFromBlob = async (studentNumber, site) => {
       throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
     }
 
-    // Try to get cached URL first
-    let blobUrl = getBlobUrl(studentNumber, site);
+    // Always fetch fresh blob URL using head (don't use cache for reads)
+    const blobPath = getBlobPath(studentNumber, site);
+    let blobUrl;
     
-    // If no cached URL, try to fetch using head
-    if (!blobUrl) {
-      const blobPath = getBlobPath(studentNumber, site);
-      try {
-        const blob = await head(blobPath, { token });
-        blobUrl = blob.url;
-        setBlobUrl(studentNumber, site, blobUrl);
-      } catch (error) {
-        // Blob doesn't exist yet
-        return [];
-      }
+    try {
+      const blob = await head(blobPath, { token });
+      blobUrl = blob.url;
+      console.log(`Found existing blob for ${studentNumber}/${site}: ${blobUrl}`);
+    } catch (error) {
+      // Blob doesn't exist yet
+      console.log(`No existing blob found for ${studentNumber}/${site}, starting fresh`);
+      return [];
     }
 
     // Fetch the blob content
     const response = await fetch(blobUrl);
     if (!response.ok) {
+      console.error(`Failed to fetch blob content: ${response.status}`);
       return [];
     }
     const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    const comments = Array.isArray(data) ? data : [];
+    console.log(`Read ${comments.length} existing comments from blob`);
+    return comments;
   } catch (error) {
     console.error('Error reading from blob:', error);
     return [];
@@ -93,6 +94,8 @@ const writeCommentsToBlob = async (studentNumber, site, comments) => {
     throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
   }
   
+  console.log(`Writing ${comments.length} comments to blob for ${studentNumber}/${site}`);
+  
   const blob = await put(blobPath, JSON.stringify(comments, null, 2), {
     access: 'public',
     contentType: 'application/json',
@@ -101,8 +104,7 @@ const writeCommentsToBlob = async (studentNumber, site, comments) => {
     allowOverwrite: true, // Allow overwriting existing blob
   });
   
-  // Cache the URL for future reads
-  setBlobUrl(studentNumber, site, blob.url);
+  console.log(`Blob updated successfully, new URL: ${blob.url}`);
 };
 
 // Logging middleware
