@@ -86,7 +86,7 @@
     <div class="comment-form">
         <h3>Add a Comment</h3>
         <textarea id="commentText" placeholder="Write your comment here..."></textarea>
-        <button onclick="postComment()">Post Comment</button>
+        <button onclick="addComment()">Post Comment</button>
     </div>
 
     <div id="error"></div>
@@ -120,7 +120,7 @@
                                     <strong>${comment.sender || 'Anonymous'}</strong> - 
                                     ${new Date(comment.ts).toLocaleString()}
                                 </div>
-                                <button class="delete-btn" onclick="deleteComment('${comment.id}')">Delete</button>
+                                <button class="delete-btn" onclick="removeComment('${comment.id}')">Delete</button>
                             </div>
                             <div>${comment.text}</div>
                         </div>
@@ -134,7 +134,7 @@
             }
         }
 
-        async function postComment() {
+        async function addComment() {
             const commentText = document.getElementById('commentText').value.trim();
             
             if (!commentText) {
@@ -152,7 +152,7 @@
             }
         }
 
-        async function deleteComment(commentId) {
+        async function removeComment(commentId) {
             
             try {
                 document.getElementById('error').innerHTML = '';
