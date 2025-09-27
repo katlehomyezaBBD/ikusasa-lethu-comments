@@ -9,12 +9,13 @@
     <h1>Comments</h1>
     <div id="comments"></div>
 
-    <script type="module" src="https://katlehomyezabbd.github.io/ikusasa-lethu-comments/comments-service.js"></script>
-    <script>
+    <script type="module">
+        import { getComments } from 'https://katlehomyezabbd.github.io/ikusasa-lethu-comments/comments-service.js';
+
         const STUDENT_NUMBER = 'STUDENT123';
         const SITE_ID = 'demo-site';
 
-        IkuasasaComments.getComments(STUDENT_NUMBER, SITE_ID)
+        getComments(STUDENT_NUMBER, SITE_ID)
             .then(comments => {
                 document.getElementById('comments').innerHTML = JSON.stringify(comments, null, 2);
             })
