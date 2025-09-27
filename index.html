@@ -3,9 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Comments</title>
 </head>
 <body>
-    <h1>Hello world</h1>
+    <h1>Comments</h1>
+    <div id="comments"></div>
+
+    <script src="https://katlehomyezabbd.github.io/ikusasa-lethu-comments/comments-service.js"></script>
+    <script>
+        const STUDENT_NUMBER = 'STUDENT123';
+        const SITE_ID = 'demo-site';
+
+        IkuasasaComments.getComments(STUDENT_NUMBER, SITE_ID)
+            .then(comments => {
+                document.getElementById('comments').innerHTML = JSON.stringify(comments, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('comments').innerHTML = 'Error: ' + error.message;
+            });
+    </script>
 </body>
 </html>
