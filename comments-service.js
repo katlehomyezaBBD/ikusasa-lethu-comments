@@ -6,7 +6,7 @@ const API_BASE_URL = 'https://ikusasa-lethu-comments.vercel.app/api';
  * @param {string} site - The site identifier (e.g., 'homepage', 'about-page')
  * @returns {Promise<Array>} Array of comment objects
  */
-export async function getComments(studentNumber, site) {
+async function getComments(studentNumber, site) {
   if (!studentNumber) {
     throw new Error('Student number is required');
   }
@@ -40,7 +40,7 @@ export async function getComments(studentNumber, site) {
  * @param {string} sender - Optional sender name
  * @returns {Promise<Object>} The created comment object
  */
-export async function postComment(studentNumber, site, text, sender = 'Anonymous') {
+async function postComment(studentNumber, site, text, sender = 'Anonymous') {
   if (!studentNumber) {
     throw new Error('Student number is required');
   }
@@ -77,7 +77,7 @@ export async function postComment(studentNumber, site, text, sender = 'Anonymous
  * @param {string} commentId - The ID of the comment to delete
  * @returns {Promise<Object>} Success message
  */
-export async function deleteComment(studentNumber, site, commentId) {
+async function deleteComment(studentNumber, site, commentId) {
   if (!studentNumber) {
     throw new Error('Student number is required');
   }
@@ -103,8 +103,15 @@ export async function deleteComment(studentNumber, site, commentId) {
   return await response.json();
 }
 
-// Default export object with all functions
-export default {
+// Export individual functions
+module.exports = {
+  getComments,
+  postComment,
+  deleteComment
+};
+
+// Also support default export
+module.exports.default = {
   getComments,
   postComment,
   deleteComment
