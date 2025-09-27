@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 const { put, head } = require('@vercel/blob');
 
 const app = express();
@@ -8,17 +7,6 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '4kb' }));
-
-// Rate limiting: 10 requests per minute per student number
-const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  keyGenerator: (req) => req.headers['x-student-number'] || req.ip,
-  message: { error: 'Rate limit exceeded. Maximum 10 requests per minute.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', limiter);
 
 // Utility functions
 const sanitizeText = (text) =>
@@ -32,21 +20,8 @@ const validateStudentNumber = (sn) => /^[a-zA-Z0-9]{3,20}$/.test(sn);
 const sanitizeSiteName = (site) =>
   typeof site === 'string' ? site.replace(/[^a-zA-Z0-9.\-_]/g, '').trim() : '';
 
-// In-memory cache to track blob URLs
-const blobUrlCache = new Map();
-
 const getBlobPath = (studentNumber, site) =>
   `comments/${studentNumber}_${sanitizeSiteName(site)}.json`;
-
-const getBlobUrl = (studentNumber, site) => {
-  const key = `${studentNumber}_${site}`;
-  return blobUrlCache.get(key);
-};
-
-const setBlobUrl = (studentNumber, site, url) => {
-  const key = `${studentNumber}_${site}`;
-  blobUrlCache.set(key, url);
-};
 
 const readCommentsFromBlob = async (studentNumber, site) => {
   try {
@@ -56,7 +31,6 @@ const readCommentsFromBlob = async (studentNumber, site) => {
       throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
     }
 
-    // Always fetch fresh blob URL using head (don't use cache for reads)
     const blobPath = getBlobPath(studentNumber, site);
     let blobUrl;
     
@@ -100,8 +74,8 @@ const writeCommentsToBlob = async (studentNumber, site, comments) => {
     access: 'public',
     contentType: 'application/json',
     token,
-    addRandomSuffix: false, // Keep the same filename
-    allowOverwrite: true, // Allow overwriting existing blob
+    addRandomSuffix: false,
+    allowOverwrite: true,
   });
   
   console.log(`Blob updated successfully, new URL: ${blob.url}`);
